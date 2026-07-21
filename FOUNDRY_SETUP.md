@@ -1,9 +1,9 @@
 # FOUNDRY_SETUP.md — Open WebUI as Foundry GUI
 
 > **Phase 2 Handoff** · Generated 2026-07-21 · Open WebUI v0.10.2 + Foundry Manager v0.2.0
+> **W8 Update** · 2026-07-21 · DAG/Manifest panels delivered via Mermaid rendering
 
 ## Architecture
-
 ```
 ┌──────────────────────┐
 │   Open WebUI GUI     │  http://localhost:3000
@@ -27,7 +27,6 @@
 ```
 
 ## Quick Start
-
 ### 1. Start Foundry Manager (backend)
 
 ```bash
@@ -76,16 +75,48 @@ Verify: `curl http://127.0.0.1:3000/api/config` → `{"status":true,...}`
 - `foundry-manager` model is automatically discovered from the shim's `/v1/models` endpoint
 - Model appears in Open WebUI's model selector dropdown
 
-### ✅ Foundry Pipeline Tools (registered via API)
-Three tools are registered in Open WebUI:
+### ✅ Foundry Pipeline Tools (5 registered)
+Five tools are registered in Open WebUI:
 
 | Tool | ID | Purpose |
 |------|----|---------|
 | **Foundry Dashboard** | `foundry_dashboard` | Fetches `GET /api/monitoring/dashboard` + `/api/monitoring/summary` + `/api/monitoring/tasks/active` |
 | **Foundry Artifacts** | `foundry_artifacts` | Fetches `GET /api/tasks/{id}/artifacts` with existence verification |
 | **Foundry Audit** | `foundry_audit` | Reads run manifests and renders the honest ledger (behavioral/partial/weak/existence tiers) |
+| **Foundry DAG Visualizer** | `foundry_dag` | Reads `dag.yaml` files and renders dependency graphs as **Mermaid diagrams** with verification status overlay |
+| **Foundry Manifest Viewer** | `foundry_manifest` | Reads run manifests and renders per-unit verification tables + **Mermaid pie charts** of tier distribution |
 
 Tools are invoked via Open WebUI's tool-calling mechanism when enabled in the chat model settings.
+
+### ✅ DAG/Manifest Panels (Mermaid Rendering)
+
+**This is the key Phase 2 deliverable.** Open WebUI natively renders ` ```mermaid ` code blocks as SVG diagrams in chat messages. The new tools return markdown containing Mermaid diagrams, which Open WebUI renders automatically — no core surgery needed.
+
+**How it works:**
+1. The `foundry_dag` tool reads a `dag.yaml` file from the harness
+2. It generates a Mermaid `graph TD` diagram with color-coded nodes:
+   - 🟢 Green = behavioral (fully verified)
+   - 🟡 Yellow = partial verification
+   - 🟠 Orange = weak verification
+   - 🔴 Red = failed
+   - ⬜ Gray = pending/not run
+3. The tool returns markdown with a ` ```mermaid ` code block
+4. Open WebUI's `CodeBlock.svelte` detects the language and renders it as an SVG
+
+**Similarly for manifests:**
+1. The `foundry_manifest` tool reads a manifest JSON from disk
+2. It generates a markdown table of per-unit verification status
+3. It includes a Mermaid `pie` chart of tier distribution
+4. Open WebUI renders both the table and the pie chart
+
+**Verified with real artifacts:**
+- `get_foundry_dag('text_query')` → 32-unit DAG with 13 verified (green) + 15 failed (red)
+- `get_foundry_dag('string_utils')` → 4-unit DAG (all pending, no dependencies)
+- `get_foundry_manifest('cam4_proof14')` → 20/20 units behaviorally verified, pie chart shows 100%
+- `get_foundry_manifest('text_query_proof8')` → 13/28 verified, pie chart shows tier split
+- `list_foundry_manifests()` → table of all 8 cam4 runs with verification rates
+
+**Data source:** Tools read directly from disk (`C:\Users\reese\Projects\Compartmentalized Software Development\`). No synthetic data — every claim traces to a real artifact.
 
 ### ✅ Session Persistence
 - Open WebUI stores chat history in SQLite (`data/webui.db`)
@@ -95,23 +126,60 @@ Tools are invoked via Open WebUI's tool-calling mechanism when enabled in the ch
 
 ### ⚠️ Tool Routing Gap
 **Issue:** Open WebUI's tool-calling requires the LLM to generate tool_call responses. When routing through the Manager shim, the Manager's GLM 5.2 model uses its own tool definitions (foundry executor, traditional agent) rather than Open WebUI's registered tools. This means:
-- The Open WebUI tools (`foundry_dashboard`, `foundry_artifacts`, `foundry_audit`) are registered but NOT automatically invoked during Manager-routed chat
+- The Open WebUI tools (`foundry_dashboard`, `foundry_artifacts`, `foundry_audit`, `foundry_dag`, `foundry_manifest`) are registered but NOT automatically invoked during Manager-routed chat
 - They ARE available when using Open WebUI with a direct OpenAI-compatible model (not through the Manager)
 
 **Workaround:** Users can manually call the tools via the Open WebUI UI's tool panel, or use the Foundry Manager's REST API directly.
 
 **Future fix:** Extend the shim to pass Open WebUI's tool definitions through to the Manager, or create a separate Open WebUI model endpoint that bypasses the Manager and calls tools directly.
 
-### ⚠️ No DAG/Manifest Visual Panel
-**Issue:** The Open WebUI plugin API does not support rendering custom HTML panels (like a DAG visualization) inside the chat window. The functions can return formatted markdown text, but not interactive visualizations.
-
-**Assessment:** This is a §6.3 gap — the plugin API genuinely cannot render DAG/manifest panels. Documented and stopped here rather than forking internals.
-
 ### ⚠️ Old UI Not Deleted
 Per §5 Phase 2, the old `foundry_manager/static/index.html` (~1000 lines vanilla JS) is NOT deleted. The retirement decision is left to the user once parity is verified.
 
 ### ⚠️ Port Conflicts
 The Manager runs on port 8000 and Open WebUI on port 3000. If either port is occupied, adjust the `--port` flag and update the `OPENAI_API_BASE_URL` accordingly.
+
+## Tool Reference
+
+### `get_foundry_dag(project_path, include_status=True)`
+Renders a foundry project's dependency graph as a Mermaid diagram.
+
+**Arguments:**
+- `project_path` (str): Path shortcut or relative path. Shortcuts: `text_query`, `string_utils`, `letter_frequency`, `root`. Or a relative path from `C:\Users\reese\Projects\Compartmentalized Software Development\`.
+- `include_status` (bool): Overlay verification status from manifest. Default `True`.
+
+**Example output (Mermaid):**
+```mermaid
+graph TD
+    tokenize_sql["✅ tokenize_sql"]:::verified
+    parse_expr["✅ parse_expr"]:::verified
+    evaluate_expr["❌ evaluate_expr"]:::failed
+    parse_expr --> evaluate_expr
+```
+
+### `list_foundry_projects()`
+Lists available foundry projects with DAG files and verification counts.
+
+### `get_foundry_manifest(run_id, include_chart=True)`
+Renders a run manifest as a structured audit report with Mermaid pie chart.
+
+**Arguments:**
+- `run_id` (str): Run ID (e.g. `cam4_proof14`, `text_query_proof8`).
+- `include_chart` (bool): Include Mermaid pie chart. Default `True`.
+
+**Example output:** Markdown table of all units with status/oracle/rung/attempts, plus a pie chart showing tier distribution.
+
+### `list_foundry_manifests()`
+Lists all available manifests with verification rates.
+
+### `get_foundry_dashboard()`
+Fetches the real-time monitoring dashboard from the Manager API.
+
+### `get_foundry_artifacts(task_id)`
+Shows a task's artifacts with existence verification.
+
+### `get_foundry_audit(run_id)`
+Reads a manifest and renders the honest ledger (§7 compliant).
 
 ## File Locations
 
@@ -122,6 +190,8 @@ The Manager runs on port 8000 and Open WebUI on port 3000. If either port is occ
 | Dashboard tool | `open-webui-foundry/backend/open_webui/tools/foundry/foundry_dashboard.py` | Monitoring dashboard |
 | Artifacts tool | `open-webui-foundry/backend/open_webui/tools/foundry/foundry_artifacts.py` | Task artifact viewer |
 | Audit tool | `open-webui-foundry/backend/open_webui/tools/foundry/foundry_audit.py` | Honest audit ledger |
+| **DAG tool** | `open-webui-foundry/backend/open_webui/tools/foundry/foundry_dag.py` | DAG → Mermaid diagram |
+| **Manifest tool** | `open-webui-foundry/backend/open_webui/tools/foundry/foundry_manifest.py` | Manifest → table + pie chart |
 
 ## Environment Variables
 
@@ -178,14 +248,14 @@ cd "C:\Users\reese\Projects\Foundry Manager"
 
 ### Open WebUI Fork
 ```
-ecd48e2f7 0.10.2 (upstream clone, not yet committed with [foundry] patches)
+ecd48e2f7 0.10.2 (upstream clone)
+[foundry] Add foundry pipeline tools and setup documentation
+[foundry] Add DAG visualizer and manifest viewer tools with Mermaid rendering
 ```
-Tools are registered via API, not yet committed to the fork. Commit pending.
 
 ## Next Steps (Phase 3+)
 
 1. **Tool routing fix**: Pass Open WebUI tools through the shim to the Manager, or create a direct-model endpoint
-2. **DAG visualization**: Evaluate if Open WebUI's Pipe system can render custom panels (likely requires frontend changes — §6.3 boundary)
+2. **Pipeline panels**: Consider Open WebUI's Pipeline system for intercepting/transforming chat (alternative to tools)
 3. **Frontend customization**: If deeper integration needed, fork Open WebUI's Svelte frontend per §6
-4. **Pipeline panels**: Consider Open WebUI's Pipeline system for intercepting/transforming chat (alternative to tools)
-5. **Old UI retirement**: Delete `foundry_manager/static/index.html` once parity is confirmed by user
+4. **Old UI retirement**: Delete `foundry_manager/static/index.html` once parity is confirmed by user
