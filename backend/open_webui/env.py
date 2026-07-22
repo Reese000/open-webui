@@ -244,7 +244,14 @@ FONTS_DIR = Path(os.getenv('FONTS_DIR', OPEN_WEBUI_DIR / 'static' / 'fonts'))
 FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', BASE_DIR / 'build')).resolve()
 
 if FROM_INIT_PY:
-    FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', OPEN_WEBUI_DIR / 'frontend')).resolve()
+    # Prefer the project-level build/ dir over the packaged frontend/ dir.
+    # The fork's build output lives at <project_root>/build/, not inside
+    # the installed package.  Fall back to OPEN_WEBUI_DIR/frontend only if
+    # build/ genuinely doesn't exist.
+    _build = BASE_DIR / 'build'
+    _packaged = OPEN_WEBUI_DIR / 'frontend'
+    _default = _build if _build.exists() else _packaged
+    FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', _default)).resolve()
 
 ####################################
 # Database
