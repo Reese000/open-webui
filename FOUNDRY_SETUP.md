@@ -47,7 +47,7 @@ set OPENAI_API_KEY=foundry-manager
 set OLLAMA_BASE_URL=
 set DATA_DIR=C:\Users\reese\Projects\open-webui-foundry\data
 set DATABASE_URL=sqlite:///C:\Users\reese\Projects\open-webui-foundry\data\webui.db
-set WEBUI_AUTH=true
+set WEBUI_AUTH=false
 set WEBUI_SECRET_KEY=your-secret-key-here
 set OAUTH_SESSION_TOKEN_ENCRYPTION_KEY=your-oauth-key-here
 
@@ -60,7 +60,7 @@ Verify: `curl http://127.0.0.1:3000/api/config` → `{"status":true,...}`
 ### 3. First-time Setup
 
 1. Open `http://localhost:3000` in your browser
-2. Sign up with admin credentials (first user becomes admin)
+2. Chat opens directly — auth is disabled (`WEBUI_AUTH=false`) for local single-user use
 3. The `foundry-manager` model should appear in the model selector
 4. Start chatting — messages route through the Manager's planning pipeline
 
@@ -139,6 +139,9 @@ Per §5 Phase 2, the old `foundry_manager/static/index.html` (~1000 lines vanill
 ### ⚠️ Port Conflicts
 The Manager runs on port 8000 and Open WebUI on port 3000. If either port is occupied, adjust the `--port` flag and update the `OPENAI_API_BASE_URL` accordingly.
 
+### ⚠️ WEBUI_AUTH toggle
+After toggling `WEBUI_AUTH` between `true` and `false`, clear browser site data for `127.0.0.1:3000` (cookies + localStorage). If `/auth` hangs with a perpetual spinner after the toggle, the fastest fix is: stop the server, back up `data/webui.db`, delete `data/webui.db*`, and restart — a fresh DB with `WEBUI_AUTH=false` auto-mints a clean guest session.
+
 ## Tool Reference
 
 ### `get_foundry_dag(project_path, include_status=True)`
@@ -209,7 +212,7 @@ Reads a manifest and renders the honest ledger (§7 compliant).
 | `OLLAMA_BASE_URL` | Set to `""` | Disable Ollama |
 | `DATA_DIR` | Yes | `C:\Users\reese\Projects\open-webui-foundry\data` |
 | `DATABASE_URL` | Yes | SQLite URL for persistence |
-| `WEBUI_AUTH` | Yes | `true` for auth, `false` to disable |
+| `WEBUI_AUTH` | Yes | `false` (auth disabled — local single-user instance) |
 | `WEBUI_SECRET_KEY` | If auth=true | Session encryption key |
 | `OAUTH_SESSION_TOKEN_ENCRYPTION_KEY` | Yes | OAuth encryption key |
 
