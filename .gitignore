@@ -311,3 +311,10 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 .cptr
+
+# ─── Open WebUI Foundry local overrides ──────────────────────────────
+.webui_secret_key
+/data/
+/backend/open_webui_data.zip
+/UsersreeseProjectsopen-webui-foundrydata/
+/UsersreeseProjectsopen-webui-foundrydatawebui.db*
